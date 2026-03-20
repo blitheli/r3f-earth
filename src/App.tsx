@@ -1,20 +1,29 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
-import './App.css'
 import Home from './pages/Home'
 import About from './pages/About'
+import Cesium3Dtiles from './pages/Cesium3Dtiles'
+import OnlyEarth from './pages/OnlyEarth'
 
 function App() {
   return (
     <BrowserRouter>
-      <nav style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
-        <Link to="/" style={{ marginRight: '1rem' }}>首页</Link>
-        <Link to="/about">关于</Link>
-      </nav>
-      
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/about" element={<About />} />
-      </Routes>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <nav style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', gap: '2rem', flexShrink: 0 }}>
+          <Link to="/">首页</Link>
+          <Link to="/cesium3Dtiles">cesium3Dtiles</Link>
+          <Link to="/onlyEarth">OnlyEarth</Link>
+          <Link to="/about">关于</Link>
+        </nav>
+        
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/cesium3Dtiles" element={<Cesium3Dtiles />} />
+            <Route path="/onlyEarth" element={<OnlyEarth />} />
+          </Routes>
+        </div>
+      </div>
     </BrowserRouter>
   )
 }

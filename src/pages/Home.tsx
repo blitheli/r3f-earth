@@ -8,7 +8,13 @@ export default function Home() {
   const [count, setCount] = useState(0)
 
   return (
-    <>
+    <div style={{ 
+      width: '100%', 
+      height: '100%', 
+      overflow: 'auto',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       <section id="center">
         <div className="hero">
           <img
@@ -124,6 +130,6 @@ export default function Home() {
 
       <div className="ticks"></div>
       <section id="spacer"></section>
-    </>
+    </div>
   )
 }
