@@ -2,7 +2,6 @@ import { useState } from 'react'
 import reactLogo from '../assets/react.svg'
 import viteLogo from '../assets/vite.svg'
 import '../App.css'
-import MyButton from '../components/MyButton'
 
 export default function Home() {
   const [count, setCount] = useState(0)
@@ -40,9 +39,6 @@ export default function Home() {
           Count is {count}
         </button>
 
-        <MyButton className="counter" onClick={() => setCount(0)}>
-          Reset
-        </MyButton>
       </section>
 
       <div className="ticks"></div>
