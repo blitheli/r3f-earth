@@ -2,7 +2,7 @@ import { addAfterEffect, useThree } from '@react-three/fiber'
 import { useEffect, type FC } from 'react'
 import StatsImpl from 'stats-gl'
 
-import type { RendererArgs } from '../controls/rendererControls'
+import type { RendererArgs } from '../controls/rendererControls.ts'
 import { useControl } from '../hooks/useControl'
 
 export const Stats: FC = () => {
