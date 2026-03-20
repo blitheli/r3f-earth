@@ -1,12 +1,11 @@
 import { addAfterEffect, useThree } from '@react-three/fiber'
 import { useEffect, type FC } from 'react'
 import StatsImpl from 'stats-gl'
+export interface StatsProps {
+  show?: boolean
+}
 
-import type { RendererArgs } from '../controls/rendererControls.ts'
-import { useControl } from '../hooks/useControl'
-
-export const Stats: FC = () => {
-  const show = useControl(({ showStats }: RendererArgs) => showStats)
+export const Stats: FC<StatsProps> = ({ show = false }) => {
   const renderer = useThree(({ gl }) => gl)
 
   useEffect(() => {

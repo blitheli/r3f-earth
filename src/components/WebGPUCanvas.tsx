@@ -5,9 +5,6 @@ import { atom, useAtomValue } from 'jotai'
 import { useEffect, useRef, type FC } from 'react'
 import type { WebGPURendererParameters } from 'three/src/renderers/webgpu/WebGPURenderer.js'
 import { WebGPURenderer, type Renderer } from 'three/webgpu'
-
-import type { RendererArgs } from '../controls/rendererControls'
-import { useControl } from '../hooks/useControl'
 import { Stats } from './Stats'
 
 /*availableAtom 是一个异步 atom，表示 WebGPU 是否可用。
@@ -57,17 +54,22 @@ export interface WebGPUCanvasProps extends Omit<CanvasProps, 'gl'> {
   renderer?: WebGPURendererParameters & {
     onInit?: (renderer: WebGPURenderer) => void | Promise<void>
   }
+  forceWebGL?: boolean  // 是否强制使用 WebGL，即使 WebGPU 可用
+  pixelRatio?: number   // 设备像素比，默认为 1，可以根据需要调整以提高渲染质量或性能
 }
 
+// WebGPUCanvas 是一个 React 函数组件，接受 WebGPUCanvasProps 作为 props
 export const WebGPUCanvas: FC<WebGPUCanvasProps> = ({
   renderer: { onInit, ...otherProps } = {},
+  forceWebGL: forceWebGLProp = false,  // 默认使用 WebGPU，除非 forceWebGLProp 为 true 或 WebGPU 不可用
+  pixelRatio: pixelRatioProp = 1,      // 默认像素比为 1，可以根据需要调整
   children,
   ...canvasProps
 }) => {
   const available = useAtomValue(availableAtom)
-  let forceWebGL = useControl(({ forceWebGL }: RendererArgs) => forceWebGL)
-  forceWebGL ||= !available
-  const pixelRatio = useControl(({ pixelRatio }: RendererArgs) => pixelRatio)
+  // 如果forceWebGL为true或WebGPU不可用，则强制使用WebGL
+  const forceWebGL = forceWebGLProp || !available
+  const pixelRatio = pixelRatioProp
 
   // 创建一个可变的引用对象，可以在组件内存储任意值，且不会因组件重新渲染而丢失
   const ref = useRef<Renderer>(null)
@@ -91,20 +93,17 @@ export const WebGPUCanvas: FC<WebGPUCanvasProps> = ({
             ...otherProps,
             forceWebGL
           })
-          // 将创建的渲染器对象存储在 ref 中，以便在组件卸载时进行清理。
           ref.current = renderer
           await renderer.init()
-
-          // Require the model-view matrix premultiplied on the CPU side.
-          // See: https://github.com/mrdoob/three.js/issues/30955
           renderer.highPrecision = true
-
+          // 如果 onInit 存在，则调用它并传入 renderer 作为参数，等待其完成（如果返回 Promise）。
+          // 这样可以让用户在 renderer 初始化后执行一些自定义的逻辑。
           await onInit?.(renderer)
           return renderer
         }}
         dpr={pixelRatio}
       >
-        {children}
+        {children}  
         <Stats />
       </Canvas>
       <Message forceWebGL={forceWebGL} />
