@@ -3,6 +3,7 @@ import Home from './pages/Home'
 import About from './pages/About'
 import Cesium3Dtiles from './pages/Cesium3Dtiles'
 import OnlyEarth from './pages/OnlyEarth'
+import Atmosphere from './pages/Atmosphere'
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
           <Link to="/">首页</Link>
           <Link to="/cesium3Dtiles">cesium3Dtiles</Link>
           <Link to="/onlyEarth">OnlyEarth</Link>
+          <Link to="/atmosphere">Atmosphere</Link>
           <Link to="/about">关于</Link>
         </nav>
         
@@ -21,6 +23,7 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/cesium3Dtiles" element={<Cesium3Dtiles />} />
             <Route path="/onlyEarth" element={<OnlyEarth />} />
+            <Route path="/atmosphere" element={<Atmosphere />} />
           </Routes>
         </div>
       </div>

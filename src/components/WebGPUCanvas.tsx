@@ -75,10 +75,7 @@ export const WebGPUCanvas: FC<WebGPUCanvasProps> = ({
   const ref = useRef<Renderer>(null)
   useEffect(() => {
     return () => {
-      // WORKAROUND: Renderer won't be disposed when used in Storybook.
-      setTimeout(() => {
-        ref.current?.dispose()
-      }, 500)
+      ref.current?.dispose()
     }
   }, [])
 
@@ -88,23 +85,40 @@ export const WebGPUCanvas: FC<WebGPUCanvasProps> = ({
         key={forceWebGL ? 'webgl' : 'webgpu'}
         {...canvasProps}
         gl={async props => {
+          // AtmosphereLightNode 会向顶点着色器注入额外的 varying，
+          // 默认 maxInterStageShaderVariables=16 不够用，需手动请求更高上限。
+          // forceWebGL 时跳过，因为 WebGL 不受此限制。
+          let device: GPUDevice | undefined
+          if (!forceWebGL && typeof navigator !== 'undefined' && navigator.gpu) {
+            const adapter = await navigator.gpu.requestAdapter()
+            if (adapter) {
+              device = await adapter.requestDevice({
+                requiredLimits: {
+                  maxInterStageShaderVariables: Math.min(
+                    adapter.limits.maxInterStageShaderVariables,
+                    32
+                  )
+                }
+              })
+            }
+          }
+
           const renderer = new WebGPURenderer({
             ...(props as any),
             ...otherProps,
-            forceWebGL
+            forceWebGL,
+            ...(device != null ? { device } : {})
           })
           ref.current = renderer
           await renderer.init()
           renderer.highPrecision = true
-          // 如果 onInit 存在，则调用它并传入 renderer 作为参数，等待其完成（如果返回 Promise）。
-          // 这样可以让用户在 renderer 初始化后执行一些自定义的逻辑。
           await onInit?.(renderer)
           return renderer
         }}
         dpr={pixelRatio}
       >
         {children}  
-        <Stats />
+        <Stats show={false} />
       </Canvas>
       <Message forceWebGL={forceWebGL} />
     </>
