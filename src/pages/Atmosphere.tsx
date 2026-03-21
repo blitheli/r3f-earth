@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 
 import { extend, useThree, type ThreeElement } from "@react-three/fiber";
 import { OrbitControls, } from "@react-three/drei";
@@ -160,11 +160,11 @@ function Content() {
   );
 
   // 3. 镜头光晕 (Lens Flare)
-  const lensFlareNode = useMemo(() => lensFlare(aerialNode), [aerialNode]);
+  const lensFlareNode = useResource(() => lensFlare(aerialNode), [aerialNode]);
 
   // 4. 色调映射 (AgX Tone Mapping, 曝光度 = 2)
   // story.js 原版通过 useToneMappingControls 交互调节，这里固定为 2
-  const toneMappingNode = useMemo(
+  const toneMappingNode = useResource(
     () => toneMapping(AgXToneMapping, uniform(2), lensFlareNode),
     [lensFlareNode],
   );
@@ -219,7 +219,7 @@ function Content() {
 export default function Atmosphere() {
   return (
     <WebGPUCanvas
-    
+      forceWebGL={false}
       shadows
       renderer={{
         logarithmicDepthBuffer: true,
