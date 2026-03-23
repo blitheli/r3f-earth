@@ -118,7 +118,7 @@ export const WebGPUCanvas: FC<WebGPUCanvasProps> = ({
         dpr={pixelRatio}
       >
         {children}  
-        <Stats show={false} />
+        <Stats show={true} />
       </Canvas>
       <Message forceWebGL={forceWebGL} />
     </>
