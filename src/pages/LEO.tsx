@@ -139,6 +139,13 @@ function Content() {
     getSunDirectionECI(date, sunDirectionECEF.value).applyMatrix4(matrixECIToECEF.value);
     getMoonDirectionECI(date, moonDirectionECEF.value).applyMatrix4(matrixECIToECEF.value);
   
+    if (reorientationPlugin != null) {
+      reorientationPlugin.lon = radians(110.0)
+      reorientationPlugin.lat = radians(40)
+      reorientationPlugin.height = 10000
+      reorientationPlugin.update()
+    }
+  
   }, []);
 
   // ---- WebGPU 后处理管线 -------------------------------------------------------------
@@ -222,7 +229,7 @@ function Content() {
   );
 }
 
-export default function Atmosphere() {
+export default function LEO() {
   return (
     <WebGPUCanvas
       forceWebGL={false}
