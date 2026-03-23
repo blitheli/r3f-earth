@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect } from "react";
+import { Suspense, useEffect, useLayoutEffect, useState } from "react";
+import { TilesPlugin } from "3d-tiles-renderer/r3f";
 import { extend, useThree, type ThreeElement } from "@react-three/fiber";
-import { OrbitControls, } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { AgXToneMapping, TextureLoader } from "three";
 import {
   context,
@@ -16,10 +17,11 @@ import {
 } from "three/tsl";
 import {
   MeshPhysicalNodeMaterial,
+  MeshLambertNodeMaterial,
   RenderPipeline,
   type MeshPhysicalNodeMaterialParameters,
-  type Renderer
-} from 'three/webgpu'
+  type Renderer,
+} from "three/webgpu";
 import {
   lensFlare,
   temporalAntialias,
@@ -38,21 +40,22 @@ import {
   AtmosphereContextNode,
   AtmosphereLight,
   AtmosphereLightNode,
-  skyBackground,
 } from "@takram/three-atmosphere/webgpu";
-import { Ellipsoid,Geodetic, radians } from "@takram/three-geospatial";
+import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { EllipsoidMesh } from "@takram/three-geospatial/r3f";
 import { WebGPUCanvas } from "../components/WebGPUCanvas";
 import { useResource } from "../hooks/useResource";
 import { useGuardedFrame } from "../hooks/useGuardedFrame";
-import { ReorientationPlugin } from '../plugins/ReorientationPlugin'
+import { ReorientationPlugin } from "../plugins/ReorientationPlugin";
+import { Globe } from "../components/Globe";
+import { ISS } from "../components/ISS";
 
 extend({ MeshPhysicalNodeMaterial });
 extend({ AtmosphereLight });
 
-declare module '@react-three/fiber' {
+declare module "@react-three/fiber" {
   interface ThreeElements {
-    atmosphereLight: ThreeElement<typeof AtmosphereLight>
+    atmosphereLight: ThreeElement<typeof AtmosphereLight>;
   }
 }
 
@@ -62,53 +65,24 @@ declare module '@react-three/fiber' {
   20260319  blitheli
 */
 
-// 加载地球纹理, 返回材质对象: MeshPhysicalNodeMaterialParameters
-//本质是：用多张纹理和 TSL 节点，在材质里做颜色、发光、粗糙度的混合和映射，实现地球效果。
-// 形参里 ({...} = {}) 表示整个参数默认是空对象，每个属性都有默认值，不传就用默认值。所以可以写 blueMarble() 而不报错。
-const blueMarble = ({
-  cloudAlbedo = 0.95,
-  oceanRoughness = 0.4, //海洋粗糙度,这里默认为光滑度最低值  oceanIOR = 1.33,
-  emissiveColor = vec3(1, 0.6, 0.5).mul(0.15), // 发光颜色(发光强度)，0.15 可见
-  oceanIOR = 1.33, //海洋的 IOR 设为 1.33（水的折射率），用来模拟海面的折射和菲涅尔效果，让海洋看起来更像真实水面。
-} = {}) => {
-  const color = new TextureLoader().load("/blue_marble/color.webp");
-  const ocean = new TextureLoader().load("/blue_marble/ocean.webp");
-  const clouds = new TextureLoader().load("/blue_marble/clouds.webp");
-  const emissive = new TextureLoader().load("/blue_marble/emissive.webp");
-  color.anisotropy = 16;
-  ocean.anisotropy = 16;
-  clouds.anisotropy = 16;
-  emissive.anisotropy = 16;
-
-  // 海洋区域且无云, 是海洋且无云”的地方为 1，其它地方为 0
-  const oceanSubClouds = mul(texture(ocean).r, texture(clouds).r.oneMinus());
-  return {
-    // mix(底色, 云色, 云量)：云量越大，越接近云色
-    colorNode: mix(texture(color).rgb, vec3(cloudAlbedo), texture(clouds).r),
-    // 自发光：城市灯光等发光遮罩* 发光颜色(发光强度)
-    emissiveNode: texture(emissive).r.mul(emissiveColor),
-    // 粗糙度：输入 1 → 输出 oceanRoughness（海洋较光滑）
-    // 输入 0 → 输出 1（陆地/云更粗糙）
-    roughnessNode: oceanSubClouds.remap(1, 0, oceanRoughness, 1),
-    // 这里把海洋的 IOR 设为 1.33（水的折射率），用来模拟海面的折射和菲涅尔效果，让海洋看起来更像真实水面。
-    // 默认把整个地球都设为 1.33，？？
-    ior: oceanIOR,
-  };
-};
-
-// 地球模型,使用WebGPUObject组件渲染
+// 使用WebGPUObject组件渲染
 function Content() {
   console.log("重新渲染地球");
+
+  const [longitude, setLongitude] = useState(-110);
+  const [latitude, setLatitude] = useState(45);
+  const [height, setHeight] = useState(408000);
+  const [reorientationPlugin, setReorientationPlugin] = useState<typeof ReorientationPlugin | null>(null);
 
   // 获取相机, 接收一个选择器函数（selector），R3F 会把包含整个场景状态的 state 对象传给它：
   // state 里大概长这样：camera,  当前活跃相机  scene, Three.js Scene  gl, WebGPU/WebGL 渲染器
   //选择器 ({ camera }) => camera 从 state 中解构出 camera 并返回，所以最终 const camera 拿到的就是当前的 Three.js 相机对象。
-  const renderer = useThree<Renderer>(({ gl }) => gl as any)
-  const scene = useThree(({ scene }) => scene)
-  const camera = useThree(({ camera }) => camera)
+  const renderer = useThree<Renderer>(({ gl }) => gl as any);
+  const scene = useThree(({ scene }) => scene);
+  const camera = useThree(({ camera }) => camera);
 
   // 大气上下文对象,使用useMemo缓存,避免重复创建大气上下文对象
-  const atmosphereContext = useResource(() => new AtmosphereContextNode(), [])
+  const atmosphereContext = useResource(() => new AtmosphereContextNode(), []);
   // 将 camera 同步到 atmosphereContext（大气光照需要相机位置做透射率计算）
   atmosphereContext.camera = camera;
 
@@ -119,9 +93,9 @@ function Content() {
   useLayoutEffect(() => {
     renderer.contextNode = context({
       ...renderer.contextNode.value,
-      getAtmosphere: () => atmosphereContext
-    })
-  }, [renderer, atmosphereContext])
+      getAtmosphere: () => atmosphereContext,
+    });
+  }, [renderer, atmosphereContext]);
 
   //-------------------------------------------------------------------------------------
   // 初始化太阳/月亮方向（基于当前系统时间）
@@ -136,16 +110,12 @@ function Content() {
 
     //
     getECIToECEFRotationMatrix(date, matrixECIToECEF.value);
-    getSunDirectionECI(date, sunDirectionECEF.value).applyMatrix4(matrixECIToECEF.value);
-    getMoonDirectionECI(date, moonDirectionECEF.value).applyMatrix4(matrixECIToECEF.value);
-  
-    if (reorientationPlugin != null) {
-      reorientationPlugin.lon = radians(110.0)
-      reorientationPlugin.lat = radians(40)
-      reorientationPlugin.height = 10000
-      reorientationPlugin.update()
-    }
-  
+    getSunDirectionECI(date, sunDirectionECEF.value).applyMatrix4(
+      matrixECIToECEF.value,
+    );
+    getMoonDirectionECI(date, moonDirectionECEF.value).applyMatrix4(
+      matrixECIToECEF.value,
+    );
   }, []);
 
   // ---- WebGPU 后处理管线 -------------------------------------------------------------
@@ -204,27 +174,31 @@ function Content() {
     renderPipeline.render();
   }, 1);
 
-  //-------------------------------------------------------------------------------------
-  // 地球材质,使用useMemo缓存,避免重复创建材质对象
-  const earthMaterial = useResource(
-    () => new MeshPhysicalNodeMaterial(blueMarble()),
-    [],
-  );
-
-
   return (
     <>
       {/* 大气光照：根据大气透射率自动计算太阳颜色 */}
-      <atmosphereLight args={[atmosphereContext]} />
+      <atmosphereLight
+        args={[atmosphereContext]}
+        castShadow
+        shadow-normalBias={0.1}
+        shadow-mapSize={[2048, 2048]}
+      />    
+      <Globe materialHandler={() => new MeshLambertNodeMaterial()}>
+        <TilesPlugin
+          // ref={setReorientationPlugin}
+          plugin={ReorientationPlugin}
+        />
+      </Globe>
 
-      {/* 地球模型 */}
-      <EllipsoidMesh
-        args={[Ellipsoid.WGS84.radii, 360, 180]}
-        material={earthMaterial}
-      />
+      <Suspense>
+        <ISS
+          matrixWorldToECEF={atmosphereContext.matrixWorldToECEF.value}
+          sunDirectionECEF={atmosphereContext.sunDirectionECEF.value}
+        />
+      </Suspense>
 
       {/* 相机限制在地球表面以外 */}
-      <OrbitControls minDistance={1.2e6} enablePan={false} />
+      <OrbitControls minDistance={20} maxDistance={1e5} />
     </>
   );
 }

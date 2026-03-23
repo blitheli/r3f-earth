@@ -1,7 +1,7 @@
 import styled from '@emotion/styled'
 import { useProgress } from '@react-three/drei'
 import { Progress as ProgressComponent } from 'antd'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, motion } from 'framer-motion'
 import type { FC } from 'react'
 
 const ProgressContainer = styled(motion.div)`

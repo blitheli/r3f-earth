@@ -19,7 +19,7 @@ export const ISS: FC<ISSProps> = ({
   sunDirectionECEF,
   ...props
 }) => {
-  const gltf = useGLTF('public/iss.glb')
+  const gltf = useGLTF('/models/iss.glb')
 
   const userData: {
     initialized?: boolean
