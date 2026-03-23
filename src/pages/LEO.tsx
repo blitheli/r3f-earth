@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useLayoutEffect, useState } from "react";
-import { TilesPlugin } from "3d-tiles-renderer/r3f";
+import { TilesPlugin, GlobeControls } from "3d-tiles-renderer/r3f";
 import { extend, useThree, type ThreeElement } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { AgXToneMapping, TextureLoader } from "three";
@@ -72,8 +72,7 @@ function Content() {
   const [longitude, setLongitude] = useState(-110);
   const [latitude, setLatitude] = useState(45);
   const [height, setHeight] = useState(408000);
-  const [reorientationPlugin, setReorientationPlugin] = useState<typeof ReorientationPlugin | null>(null);
-
+  
   // 获取相机, 接收一个选择器函数（selector），R3F 会把包含整个场景状态的 state 对象传给它：
   // state 里大概长这样：camera,  当前活跃相机  scene, Three.js Scene  gl, WebGPU/WebGL 渲染器
   //选择器 ({ camera }) => camera 从 state 中解构出 camera 并返回，所以最终 const camera 拿到的就是当前的 Three.js 相机对象。
@@ -182,23 +181,26 @@ function Content() {
         castShadow
         shadow-normalBias={0.1}
         shadow-mapSize={[2048, 2048]}
-      />    
-      <Globe materialHandler={() => new MeshLambertNodeMaterial()}>
-        <TilesPlugin
-          // ref={setReorientationPlugin}
-          plugin={ReorientationPlugin}
+      >
+        <orthographicCamera
+          attach="shadow-camera"
+          top={60}
+          bottom={-60}
+          left={-60}
+          right={60}
+          near={0}
+          far={160}
         />
-      </Globe>
+      </atmosphereLight>
+      <GlobeControls enableDamping={true} minDistance={7e6} maxDistance={1e8} />
 
+      <Globe materialHandler={() => new MeshLambertNodeMaterial()} />
       <Suspense>
         <ISS
           matrixWorldToECEF={atmosphereContext.matrixWorldToECEF.value}
           sunDirectionECEF={atmosphereContext.sunDirectionECEF.value}
         />
       </Suspense>
-
-      {/* 相机限制在地球表面以外 */}
-      <OrbitControls minDistance={20} maxDistance={1e5} />
     </>
   );
 }
@@ -216,10 +218,9 @@ export default function LEO() {
       }}
       camera={{
         fov: 60,
-        position: [-2e7, 0, 0],
-        up: [0, 0, 1],
-        near: 1e4,
-        far: 1e9,
+        position: [80, 80, 100],
+        near: 10,
+        far: 1e7,
       }}
     >
       <Content />

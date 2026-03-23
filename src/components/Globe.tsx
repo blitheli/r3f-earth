@@ -10,9 +10,7 @@ import type { FC, ReactNode, Ref } from 'react'
 import { mergeRefs } from 'react-merge-refs'
 import type { Material } from 'three'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
-
 import { radians } from '@takram/three-geospatial'
-
 import { TilesFadePlugin } from '../plugins/fade/TilesFadePlugin'
 import { TileCreasedNormalsPlugin } from '../plugins/TileCreasedNormalsPlugin'
 import { TileMaterialReplacementPlugin } from '../plugins/TileMaterialReplacementPlugin'
@@ -30,7 +28,7 @@ export interface GlobeProps {
 
 export const Globe: FC<GlobeProps> = ({
   ref,
-  apiKey = import.meta.env.STORYBOOK_GOOGLE_MAP_API_KEY,
+  apiKey = import.meta.env.VITE_GOOGLE_MAP_API_KEY,
   materialHandler,
   children
 }) => (
