@@ -40,7 +40,7 @@ export const CesiumGlobe: FC<CesiumGlobeProps> = ({
   children,
 }) => (
   <TilesRenderer key={assetId}>
-    <TilesPlugin plugin={CesiumIonAuthPlugin} args={{ apiToken, assetId }} />
+    <TilesPlugin plugin={CesiumIonAuthPlugin} args={[{ apiToken, assetId }]} />
     <TilesPlugin plugin={GLTFExtensionsPlugin} dracoLoader={dracoLoader} />    
     <TilesPlugin plugin={UpdateOnChangePlugin} />
     {showAttribution && <TilesAttributionOverlay />}

@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { GlobeControls, TilesRenderer } from "3d-tiles-renderer";
 import * as THREE from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 /*
   2026-03-24 blitheli
@@ -13,32 +14,25 @@ import * as THREE from "three";
 */
 interface CameraControllerProps {
   tilesRenderer: TilesRenderer | null;
-  scRef: React.RefObject<THREE.Object3D>;
+  scRef: React.RefObject<THREE.Object3D | null>;
   mode: "globe" | "local";
   initRelativePosition?: THREE.Vector3;
+  /** 与 WebGPUCanvas / GlobeCamera 中 camera 的裁剪面一致；GlobeControls 会改写 near/far，切回局部时必须恢复 */
+  localNear?: number;
+  localFar?: number;
 }
 
 export const CameraController: React.FC<CameraControllerProps> = ({
   tilesRenderer,
   scRef: aircraftRef,
   mode,
-  initRelativePosition = new THREE.Vector3(100, 0, 0),
+  initRelativePosition = new THREE.Vector3(200, 0, 0),
+  localNear = 0.1,
+  localFar = 1e9,
 }) => {
   const { camera, gl, scene } = useThree();
-  const orbitRef = useRef<any>(null);
-
-  useEffect(() => {
-    // 初始设置局部坐标系的相机位置
-    console.log("组件挂载完成, 视角模式:", mode);
-    if (mode === "local" && aircraftRef.current && camera) {      
-      const worldPos = new THREE.Vector3();
-      aircraftRef.current.getWorldPosition(worldPos);
-      camera.position.copy(worldPos).add(initRelativePosition);
-    } else {
-      camera.position.copy(new THREE.Vector3(0, -2e7, 0));
-    }
-    console.log("相机初始位置:", camera.position.toArray());
-  }, [mode]);
+  const orbitRef = useRef<OrbitControlsImpl | null>(null);
+  const pendingLocalResetRef = useRef(false);
 
   // 1. 初始化 GlobeControls (仅在 globe 模式下激活逻辑)
   const globeControls = useMemo(() => {
@@ -47,14 +41,49 @@ export const CameraController: React.FC<CameraControllerProps> = ({
     return ctrl;
   }, [tilesRenderer, scene, camera, gl]);
 
-  // 2. 核心逻辑循环
-  useFrame(() => {
+  // 2. 模式切换时，显式启停 controls 并重置相机
+  useEffect(() => {
+    globeControls.enabled = mode === "globe";
+
+    if (mode === "local") {
+      // OrbitControls 在该模式下是条件渲染，切换当帧可能还未挂载。
+      // 延后到 useFrame 中等待 controls 就绪后再重置相机。
+      pendingLocalResetRef.current = true;
+      return;
+    }
+
     if (mode === "globe") {
+      camera.position.set(0, -2e7, 0);
+      camera.up.set(0, 0, 1);
+      camera.lookAt(0, 0, 0);
+      globeControls.update();
+    }
+  }, [mode, globeControls, camera, aircraftRef, initRelativePosition]);
+
+  // 3. 核心逻辑循环
+  useFrame(() => {
+    if (mode === "globe" && globeControls.enabled) {
       globeControls.update();
     } else if (mode === "local" && aircraftRef.current && orbitRef.current) {
       // 获取飞行器的世界坐标 (ECEF)
       const worldPos = new THREE.Vector3();
       aircraftRef.current.getWorldPosition(worldPos);
+
+      if (pendingLocalResetRef.current) {
+        camera.position.copy(worldPos).add(initRelativePosition);
+        camera.lookAt(worldPos);
+        camera.up.copy(worldPos.clone().normalize());
+        // GlobeControls.adjustCamera() 在全球模式下会改写 near/far；禁用后不会自动恢复，
+        // 若仍保留巨大 near，局部场景会被全部裁掉，表现为「切回局部一片黑」。
+        if (camera instanceof THREE.PerspectiveCamera) {
+          camera.near = localNear;
+          camera.far = localFar;
+          camera.updateProjectionMatrix();
+        }
+        orbitRef.current.target.copy(worldPos);
+        orbitRef.current.update();
+        pendingLocalResetRef.current = false;
+      }
 
       // 将 OrbitControls 的旋转中心锁定在飞行器上
       orbitRef.current.target.copy(worldPos);
@@ -68,7 +97,7 @@ export const CameraController: React.FC<CameraControllerProps> = ({
     }
   });
 
-  // 销毁
+  // 4. 销毁
   React.useEffect(() => {
     return () => globeControls.dispose();
   }, [globeControls]);
@@ -78,7 +107,6 @@ export const CameraController: React.FC<CameraControllerProps> = ({
       {mode === "local" && (
         <OrbitControls
           ref={orbitRef}
-          args={[camera, gl.domElement]}
           enableDamping
           // 防止缩放穿透地球表面（可选）
           minDistance={0.1}

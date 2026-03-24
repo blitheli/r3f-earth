@@ -1,10 +1,9 @@
 // R3F, DREI and LEVA imports
 import { Environment } from "@react-three/drei";
 import { WebGPUCanvas } from "../components/WebGPUCanvas";
-import { TilesRenderer } from "3d-tiles-renderer";
 import { CesiumGlobe } from "../components/CesiumGlobe";
 import { Suspense, useRef, useState } from "react";
-import { Group } from "three";
+import { Group, Vector3 } from "three";
 import { Geodetic, radians } from "@takram/three-geospatial";
 import { useGLTF } from "../hooks/useGLTF";
 import { CameraController } from "../components/CameraController";
@@ -42,8 +41,7 @@ const issPosition = new Geodetic(
 ).toECEF();
 console.log("ISS位置:", issPosition.toArray());
 
-export default function GlobeTest() {
-  const [tiles, setTiles] = useState<TilesRenderer | null>(null);
+export default function GlobeCamera() {
   const [viewMode, setViewMode] = useState<"globe" | "local">("local");
   const issRef = useRef<Group>(null);
 
@@ -62,18 +60,14 @@ export default function GlobeTest() {
         }}
         camera={{
           fov: 60,
-          position: viewMode === "globe" ? [0, -2e7, 0] : issPosition,
+          // 相机位置由 CameraController 统一管理，避免与 controls 抢状态
+          position: [0, -2e7, 0],
           near: 0.1,
           far: 1e9,
         }}
       >
         {/* Cesium 3D Tiles 全球地形 */}
-        <CesiumGlobe
-          assetId={assetId as number}
-          onUpdate={(self: TilesRenderer) => {
-            if (!tiles) setTiles(self);
-          }}
-        />
+        <CesiumGlobe assetId={assetId as number} />
 
         {/* ISS 模型 */}
         <Suspense fallback={null}>
@@ -84,7 +78,7 @@ export default function GlobeTest() {
 
         {/* 智能相机控制器 */}
         <CameraController
-          tilesRenderer={tiles}
+          tilesRenderer={null}
           scRef={issRef}
           mode={viewMode}
         />
