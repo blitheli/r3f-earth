@@ -5,6 +5,9 @@ import { GlobeControls, TilesRenderer } from "3d-tiles-renderer";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
+/** 默认相对偏移必须用稳定引用；否则父组件任意重渲染（如 leva 改 hour）都会 new 出新 Vector3，触发 useEffect 误判为「参数变化」并重置局部相机。 */
+const DEFAULT_INIT_RELATIVE_POSITION = new THREE.Vector3(200, 0, 0);
+
 /*
   2026-03-24 blitheli
   
@@ -26,7 +29,7 @@ export const CameraController: React.FC<CameraControllerProps> = ({
   tilesRenderer,
   scRef: aircraftRef,
   mode,
-  initRelativePosition = new THREE.Vector3(200, 0, 0),
+  initRelativePosition = DEFAULT_INIT_RELATIVE_POSITION,
   localNear = 0.1,
   localFar = 1e9,
 }) => {
