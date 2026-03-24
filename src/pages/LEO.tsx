@@ -1,8 +1,6 @@
-import { Suspense, useEffect, useLayoutEffect, useState } from "react";
-import { TilesPlugin, GlobeControls } from "3d-tiles-renderer/r3f";
+import { Suspense, useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
 import { extend, useThree, type ThreeElement } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { AgXToneMapping, TextureLoader } from "three";
+import { AgXToneMapping, Object3D } from "three";
 import {
   context,
   mix,
@@ -32,8 +30,6 @@ import {
   getECIToECEFRotationMatrix,
   getMoonDirectionECI,
   getSunDirectionECI,
-  getSunDirectionECEF,
-  getMoonDirectionECEF,
 } from "@takram/three-atmosphere";
 import {
   aerialPerspective,
@@ -41,15 +37,15 @@ import {
   AtmosphereLight,
   AtmosphereLightNode,
 } from "@takram/three-atmosphere/webgpu";
-import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
-import { EllipsoidMesh } from "@takram/three-geospatial/r3f";
 import { WebGPUCanvas } from "../components/WebGPUCanvas";
 import { useResource } from "../hooks/useResource";
 import { useGuardedFrame } from "../hooks/useGuardedFrame";
 import { ReorientationPlugin } from "../plugins/ReorientationPlugin";
 import { Globe } from "../components/Globe";
 import { ISS } from "../components/ISS";
-
+import { CameraController } from "../components/CameraController";
+import { Geodetic, radians } from "@takram/three-geospatial";
+import { useControls } from "leva";
 extend({ MeshPhysicalNodeMaterial });
 extend({ AtmosphereLight });
 
@@ -69,10 +65,25 @@ declare module "@react-three/fiber" {
 function Content() {
   console.log("重新渲染地球");
 
-  const [longitude, setLongitude] = useState(-110);
-  const [latitude, setLatitude] = useState(45);
-  const [height, setHeight] = useState(408000);
+  const issRef = useRef<Object3D | null>(null);
   
+  const { longitude, latitude, height } = useControls({
+    longitude: { value: -110, min: -180, max: 180, step: 1 },
+    latitude: { value: 45, min: -90, max: 90, step: 1 },
+    height: { value: 408000, min: 10000, max: 1e6, step: 1000 },
+  });
+
+  // ISS 位置
+  const issPosition = useMemo(
+    () =>
+      new Geodetic(
+        radians(longitude), // 经度
+        radians(latitude), // 纬度
+        height, // 400 公里高度
+      ).toECEF(),
+    [longitude, latitude, height],
+  );
+
   // 获取相机, 接收一个选择器函数（selector），R3F 会把包含整个场景状态的 state 对象传给它：
   // state 里大概长这样：camera,  当前活跃相机  scene, Three.js Scene  gl, WebGPU/WebGL 渲染器
   //选择器 ({ camera }) => camera 从 state 中解构出 camera 并返回，所以最终 const camera 拿到的就是当前的 Three.js 相机对象。
@@ -101,7 +112,7 @@ function Content() {
   // 只有第一次渲染时，才初始化太阳/月亮方向
   //  后续要实时变化时间，实现动态效果
   useEffect(() => {
-    const date = new Date();
+    const date = new Date(2026, 3, 24, 2, 0, 0);
     console.log("date", date);
     // 获取大气上下文对象的属性(直接取出属性值)
     const { matrixECIToECEF, sunDirectionECEF, moonDirectionECEF } =
@@ -192,15 +203,18 @@ function Content() {
           far={160}
         />
       </atmosphereLight>
-      <GlobeControls enableDamping={true} minDistance={7e6} maxDistance={1e8} />
 
       <Globe materialHandler={() => new MeshLambertNodeMaterial()} />
       <Suspense>
-        <ISS
+        <ISS ref={issRef}
+          position={issPosition}
           matrixWorldToECEF={atmosphereContext.matrixWorldToECEF.value}
           sunDirectionECEF={atmosphereContext.sunDirectionECEF.value}
         />
       </Suspense>
+
+      {/* 智能相机控制器 */}
+      <CameraController tilesRenderer={null} scRef={issRef} mode={'local'} />
     </>
   );
 }
