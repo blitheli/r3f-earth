@@ -21,10 +21,12 @@ export const ISS: FC<ISSProps> = ({
 }) => {
   const gltf = useGLTF('/models/iss.glb')
 
+  //给变量加类型标注，并从 gltf.userData 取值。
   const userData: {
     initialized?: boolean
   } = gltf.userData
 
+  // 如果未初始化，则初始化, 给每个mesh设置阴影接收和投射
   if (userData.initialized !== true) {
     userData.initialized = true
     Object.values(gltf.meshes).forEach(mesh => {
