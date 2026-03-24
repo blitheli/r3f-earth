@@ -1,6 +1,6 @@
-import { Suspense, useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { extend, useThree, type ThreeElement } from "@react-three/fiber";
-import { AgXToneMapping, Object3D } from "three";
+import { AgXToneMapping, Matrix4, Object3D } from "three";
 import {
   context,
   mix,
@@ -44,8 +44,9 @@ import { ReorientationPlugin } from "../plugins/ReorientationPlugin";
 import { Globe } from "../components/Globe";
 import { ISS } from "../components/ISS";
 import { CameraController } from "../components/CameraController";
-import { Geodetic, radians } from "@takram/three-geospatial";
+import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { useControls } from "leva";
+
 extend({ MeshPhysicalNodeMaterial });
 extend({ AtmosphereLight });
 
@@ -66,14 +67,15 @@ function Content() {
   console.log("重新渲染地球");
 
   const issRef = useRef<Object3D | null>(null);
-  
-  const { longitude, latitude, height } = useControls({
+
+  const { longitude, latitude, height, hour } = useControls({
     longitude: { value: -110, min: -180, max: 180, step: 1 },
     latitude: { value: 45, min: -90, max: 90, step: 1 },
     height: { value: 408000, min: 10000, max: 1e6, step: 1000 },
+    hour: { value: 2, min: 0, max: 24, step: 1 },
   });
 
-  // ISS 位置
+  // ISS 位置（通过GUI控制）
   const issPosition = useMemo(
     () =>
       new Geodetic(
@@ -83,6 +85,22 @@ function Content() {
       ).toECEF(),
     [longitude, latitude, height],
   );
+
+  // ISS 根节点：用矩阵（NUE 姿态 + ECEF 位置），不再用 position prop
+  useLayoutEffect(() => {
+    const mt4 = new Matrix4();
+    Ellipsoid.WGS84.getNorthUpEastFrame(issPosition, mt4);
+    const g = issRef.current;
+    if (g == null) return;
+
+    g.matrixAutoUpdate = false;
+    g.matrix.copy(mt4);
+    g.matrix.setPosition(issPosition);
+    g.updateMatrixWorld(true);
+  }, [issPosition]);
+
+
+  //-------------------------------------------------------------------------------------
 
   // 获取相机, 接收一个选择器函数（selector），R3F 会把包含整个场景状态的 state 对象传给它：
   // state 里大概长这样：camera,  当前活跃相机  scene, Three.js Scene  gl, WebGPU/WebGL 渲染器
@@ -107,13 +125,14 @@ function Content() {
     });
   }, [renderer, atmosphereContext]);
 
+    
   //-------------------------------------------------------------------------------------
   // 初始化太阳/月亮方向（基于当前系统时间）
   // 只有第一次渲染时，才初始化太阳/月亮方向
   //  后续要实时变化时间，实现动态效果
   useEffect(() => {
-    const date = new Date(2026, 3, 24, 2, 0, 0);
-    console.log("date", date);
+    const date = new Date(2026, 3, 24, hour, 0, 0);
+    
     // 获取大气上下文对象的属性(直接取出属性值)
     const { matrixECIToECEF, sunDirectionECEF, moonDirectionECEF } =
       atmosphereContext;
@@ -126,7 +145,7 @@ function Content() {
     getMoonDirectionECI(date, moonDirectionECEF.value).applyMatrix4(
       matrixECIToECEF.value,
     );
-  }, []);
+  }, [hour]);
 
   // ---- WebGPU 后处理管线 -------------------------------------------------------------
 
@@ -193,28 +212,21 @@ function Content() {
         shadow-normalBias={0.1}
         shadow-mapSize={[2048, 2048]}
       >
-        <orthographicCamera
-          attach="shadow-camera"
-          top={60}
-          bottom={-60}
-          left={-60}
-          right={60}
-          near={0}
-          far={160}
-        />
+     
       </atmosphereLight>
 
       <Globe materialHandler={() => new MeshLambertNodeMaterial()} />
       <Suspense>
-        <ISS ref={issRef}
-          position={issPosition}
-          matrixWorldToECEF={atmosphereContext.matrixWorldToECEF.value}
-          sunDirectionECEF={atmosphereContext.sunDirectionECEF.value}
-        />
+        <group ref={issRef}>
+          <ISS
+            matrixWorldToECEF={atmosphereContext.matrixWorldToECEF.value}
+            sunDirectionECEF={atmosphereContext.sunDirectionECEF.value}
+          />
+        </group>
       </Suspense>
 
       {/* 智能相机控制器 */}
-      <CameraController tilesRenderer={null} scRef={issRef} mode={'local'} />
+      <CameraController tilesRenderer={null} scRef={issRef} mode={"local"} />
     </>
   );
 }
@@ -231,7 +243,7 @@ export default function LEO() {
         },
       }}
       camera={{
-        fov: 60,
+        fov: 50,
         position: [80, 80, 100],
         near: 10,
         far: 1e7,

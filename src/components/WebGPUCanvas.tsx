@@ -62,7 +62,7 @@ export interface WebGPUCanvasProps extends Omit<CanvasProps, 'gl'> {
 export const WebGPUCanvas: FC<WebGPUCanvasProps> = ({
   renderer: { onInit, ...otherProps } = {},
   forceWebGL: forceWebGLProp = false,  // 默认使用 WebGPU，除非 forceWebGLProp 为 true 或 WebGPU 不可用
-  pixelRatio: pixelRatioProp = 1,      // 默认像素比为 1，可以根据需要调整
+  pixelRatio: pixelRatioProp = Math.min(window.devicePixelRatio, 1),      // 默认像素比为 1，可以根据需要调整
   children,
   ...canvasProps
 }) => {
