@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { extend, useThree, type ThreeElement } from "@react-three/fiber";
-import { AgXToneMapping, Matrix4, Object3D } from "three";
+import { AgXToneMapping, MathUtils, Matrix4, Object3D } from "three";
 import {
   context,
   mix,
@@ -62,17 +62,21 @@ declare module "@react-three/fiber" {
   20260319  blitheli
 */
 
+const mt4 = new Matrix4();
+
 // 使用WebGPUObject组件渲染
 function Content() {
   console.log("重新渲染地球");
 
+  // ISS的ECEF位置
   const issRef = useRef<Object3D | null>(null);
 
+  // GUI控制
   const { longitude, latitude, height, hour } = useControls({
     longitude: { value: -110, min: -180, max: 180, step: 1 },
     latitude: { value: 45, min: -90, max: 90, step: 1 },
     height: { value: 408000, min: 10000, max: 1e6, step: 1000 },
-    hour: { value: 2, min: 0, max: 24, step: 0.1 },
+    hour: { value: 6.5, min: 0, max: 24, step: 0.1 },
   });
 
   // ISS 位置（通过GUI控制）
@@ -88,7 +92,7 @@ function Content() {
 
   // ISS 根节点：用矩阵（NUE 姿态 + ECEF 位置），不再用 position prop
   useLayoutEffect(() => {
-    const mt4 = new Matrix4();
+
     Ellipsoid.WGS84.getNorthUpEastFrame(issPosition, mt4);
     const g = issRef.current;
     if (g == null) return;
@@ -126,18 +130,38 @@ function Content() {
   }, [renderer, atmosphereContext]);
 
     
-  //-------------------------------------------------------------------------------------
-  // 初始化太阳/月亮方向（基于当前系统时间）
-  // 只有第一次渲染时，才初始化太阳/月亮方向
-  //  后续要实时变化时间，实现动态效果
-  useEffect(() => {
-    const date = new Date(2026, 3, 24, hour, 0, 0);
-    
-    // 获取大气上下文对象的属性(直接取出属性值)
+//-------------------------------------------------------------------------------------
+  // 太阳/月亮方向：Story 的 useLocalDateControls 用 Motion spring，滑块拖动时数值连续变化；
+  // Leva + useEffect 只在状态跳变时更新，阴影/光照会「一顿一顿」。这里每帧用 damp 逼近面板目标，与弹簧类似。
+  const smoothHourRef = useRef(hour);
+  const smoothLongitudeRef = useRef(longitude);
+  const DAMP = 10;
+
+  useGuardedFrame((_, delta) => {
+    smoothHourRef.current = MathUtils.damp(
+      smoothHourRef.current,
+      hour,
+      DAMP,
+      delta,
+    );
+    smoothLongitudeRef.current = MathUtils.damp(
+      smoothLongitudeRef.current,
+      longitude,
+      DAMP,
+      delta,
+    );
+
+    const timeOfDay = smoothHourRef.current;
+    const dayOfYear = 200;
+    const epoch = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
+    const offset = smoothLongitudeRef.current / 15;
+    const date =
+      epoch +
+      ((dayOfYear - 1) * 24 + timeOfDay - offset) * 3600000;
+
     const { matrixECIToECEF, sunDirectionECEF, moonDirectionECEF } =
       atmosphereContext;
 
-    //
     getECIToECEFRotationMatrix(date, matrixECIToECEF.value);
     getSunDirectionECI(date, sunDirectionECEF.value).applyMatrix4(
       matrixECIToECEF.value,
@@ -145,7 +169,7 @@ function Content() {
     getMoonDirectionECI(date, moonDirectionECEF.value).applyMatrix4(
       matrixECIToECEF.value,
     );
-  }, [hour]);
+  });
 
   // ---- WebGPU 后处理管线 -------------------------------------------------------------
 
@@ -207,12 +231,20 @@ function Content() {
     <>
       {/* 大气光照：根据大气透射率自动计算太阳颜色 */}
       <atmosphereLight
-        args={[atmosphereContext]}
+        args={[atmosphereContext, 80]}
         castShadow
         shadow-normalBias={0.1}
         shadow-mapSize={[2048, 2048]}
       >
-     
+      <orthographicCamera
+          attach='shadow-camera'
+          top={60}
+          bottom={-60}
+          left={-60}
+          right={60}
+          near={0}
+          far={160}
+        />
       </atmosphereLight>
 
       <Globe materialHandler={() => new MeshLambertNodeMaterial()} />

@@ -1,14 +1,9 @@
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { extend, useThree, type ThreeElement } from "@react-three/fiber";
-import { AgXToneMapping, Matrix4, Object3D, Vector3 } from "three";
+import { Suspense, useLayoutEffect, useRef, useState } from "react";
+import { extend, useFrame, useThree, type ThreeElement } from "@react-three/fiber";
+import { AgXToneMapping, MathUtils, Vector3 } from "three";
 import { TilesPlugin } from '3d-tiles-renderer/r3f'
 import { context, mrt, output, pass, toneMapping, uniform } from 'three/tsl'
-import {
-  MeshPhysicalNodeMaterial,
-  MeshLambertNodeMaterial,
-  RenderPipeline,
-  type Renderer,
-} from "three/webgpu";
+import { MeshLambertNodeMaterial, RenderPipeline, type Renderer } from "three/webgpu";
 import {
   lensFlare,
   temporalAntialias,
@@ -25,6 +20,7 @@ import {
   AtmosphereContextNode,
   AtmosphereLight,
   AtmosphereLightNode,
+  skyEnvironment,
 } from "@takram/three-atmosphere/webgpu";
 import { WebGPUCanvas } from "../components/WebGPUCanvas";
 import { useResource } from "../hooks/useResource";
@@ -56,15 +52,14 @@ const position = new Vector3()
 // 使用WebGPUObject组件渲染
 function Content() {
   console.log("重新渲染地球");
-  
-  const [reorientationPlugin, setReorientationPlugin] = useState<ReorientationPlugin | null>(null);
 
+  const [reorientationPlugin, setReorientationPlugin] = useState<ReorientationPlugin | null>(null);
 
   const { longitude, latitude, height, hour } = useControls({
     longitude: { value: -110, min: -180, max: 180, step: 1 },
     latitude: { value: 45, min: -90, max: 90, step: 1 },
     height: { value: 408000, min: 10000, max: 1e6, step: 1000 },
-    hour: { value: 2, min: 0, max: 24, step: 0.1 },
+    hour: { value: 6.5, min: 0, max: 24, step: 0.01 },
   });
 
 
@@ -95,17 +90,37 @@ function Content() {
    
 
   //-------------------------------------------------------------------------------------
-  // 初始化太阳/月亮方向（基于当前系统时间）
-  // 只有第一次渲染时，才初始化太阳/月亮方向
-  //  后续要实时变化时间，实现动态效果
-  useEffect(() => {
-    const date = new Date(2026, 3, 24, hour, 0, 0);
-    
-    // 获取大气上下文对象的属性(直接取出属性值)
+  // 太阳/月亮方向：Story 的 useLocalDateControls 用 Motion spring，滑块拖动时数值连续变化；
+  // Leva + useEffect 只在状态跳变时更新，阴影/光照会「一顿一顿」。这里每帧用 damp 逼近面板目标，与弹簧类似。
+  const smoothHourRef = useRef(hour);
+  const smoothLongitudeRef = useRef(longitude);
+  const DAMP = 10;
+
+  useFrame((_, delta) => {
+    smoothHourRef.current = MathUtils.damp(
+      smoothHourRef.current,
+      hour,
+      DAMP,
+      delta,
+    );
+    smoothLongitudeRef.current = MathUtils.damp(
+      smoothLongitudeRef.current,
+      longitude,
+      DAMP,
+      delta,
+    );
+
+    const timeOfDay = smoothHourRef.current;
+    const dayOfYear = 200;
+    const epoch = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
+    const offset = smoothLongitudeRef.current / 15;
+    const date =
+      epoch +
+      ((dayOfYear - 1) * 24 + timeOfDay - offset) * 3600000;
+
     const { matrixECIToECEF, sunDirectionECEF, moonDirectionECEF } =
       atmosphereContext;
 
-    //
     getECIToECEFRotationMatrix(date, matrixECIToECEF.value);
     getSunDirectionECI(date, sunDirectionECEF.value).applyMatrix4(
       matrixECIToECEF.value,
@@ -113,9 +128,9 @@ function Content() {
     getMoonDirectionECI(date, moonDirectionECEF.value).applyMatrix4(
       matrixECIToECEF.value,
     );
-  }, [hour]);
+  });
 
-  
+  // 经纬高变化时，更新AtmosphereContext的matrixWorldToECEF,以及插件(内部更新了世界坐标系原点)
   useLayoutEffect(() => {
     // 更新AtmosphereContext的matrixWorldToECEF
     Ellipsoid.WGS84.getNorthUpEastFrame(
@@ -164,7 +179,7 @@ function Content() {
   // 4. 色调映射 (AgX Tone Mapping, 曝光度 = 2)
   // story.js 原版通过 useToneMappingControls 交互调节，这里固定为 2
   const toneMappingNode = useResource(
-    () => toneMapping(AgXToneMapping, uniform(2), lensFlareNode),
+    () => toneMapping(AgXToneMapping, uniform(3), lensFlareNode),
     [lensFlareNode]);
 
   // 5. 时域抗锯齿 (Temporal Anti-Aliasing)
@@ -190,11 +205,14 @@ function Content() {
     renderPipeline.render();
   }, 1);
 
+  const envNode = useResource(() => skyEnvironment(atmosphereContext), [atmosphereContext])
+  scene.environmentNode = envNode
+  
   return (
     <>
       {/* 大气光照：根据大气透射率自动计算太阳颜色 */}
       <atmosphereLight
-        args={[atmosphereContext]}
+        args={[atmosphereContext, 80]}
         castShadow
         shadow-normalBias={0.1}
         shadow-mapSize={[2048, 2048]}
