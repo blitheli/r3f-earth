@@ -35,6 +35,7 @@ export const ISS: FC<ISSProps> = ({
     })
   }
 
+  // 获取ISS的各个部件
   const { trusses, panels, radiators } = useMemo(() => {
     const scene = gltf.scene
     return {
@@ -59,6 +60,8 @@ export const ISS: FC<ISSProps> = ({
     }
   }, [gltf.scene])
 
+  // 每帧更新ISS的各个部件的旋转
+  // 根据太阳方向计算ISS的各个部件的旋转
   useGuardedFrame(() => {
     const sunDirectionLocal = vector
       .copy(sunDirectionECEF)
