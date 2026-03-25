@@ -7,6 +7,22 @@ import type { WebGPURendererParameters } from 'three/src/renderers/webgpu/WebGPU
 import { WebGPURenderer, type Renderer } from 'three/webgpu'
 import { Stats } from './Stats'
 
+/*
+  Cavas包装器，用于在WebGPU和WebGL之间切换。
+
+  主要功能：
+  1. 检查浏览器是否支持WebGPU
+  2. 如果支持，则使用WebGPU渲染
+  3. 如果不支持，则使用WebGL渲染
+  4. 支持WebGPU和WebGL之间的切换
+  5. 支持WebGPU和WebGL的性能优化
+  6. 支持WebGPU和WebGL的兼容性处理
+  7. 支持WebGPU和WebGL的错误处理
+  8. 支持WebGPU和WebGL的日志记录
+
+  20260325  blitheli
+*/
+
 /*availableAtom 是一个异步 atom，表示 WebGPU 是否可用。
   atom 用于创建一个“原子”状态单元，可以被 React 组件读取和订阅。
   你可以把它理解为一个可响应的变量，组件可以用 useAtom 读取它的值。
@@ -62,10 +78,13 @@ export interface WebGPUCanvasProps extends Omit<CanvasProps, 'gl'> {
 export const WebGPUCanvas: FC<WebGPUCanvasProps> = ({
   renderer: { onInit, ...otherProps } = {},
   forceWebGL: forceWebGLProp = false,  // 默认使用 WebGPU，除非 forceWebGLProp 为 true 或 WebGPU 不可用
-  pixelRatio: pixelRatioProp = Math.min(window.devicePixelRatio, 1),      // 默认像素比为 1，可以根据需要调整
+  pixelRatio: pixelRatioProp = Math.max(window.devicePixelRatio, 1),      // 默认像素比为 1，可以根据需要调整
   children,
   ...canvasProps
 }) => {
+
+  console.log('pixelRatio: ', pixelRatioProp);
+
   const available = useAtomValue(availableAtom)
   // 如果forceWebGL为true或WebGPU不可用，则强制使用WebGL
   const forceWebGL = forceWebGLProp || !available

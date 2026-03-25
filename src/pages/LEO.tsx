@@ -72,7 +72,7 @@ function Content() {
     longitude: { value: -110, min: -180, max: 180, step: 1 },
     latitude: { value: 45, min: -90, max: 90, step: 1 },
     height: { value: 408000, min: 10000, max: 1e6, step: 1000 },
-    hour: { value: 2, min: 0, max: 24, step: 1 },
+    hour: { value: 2, min: 0, max: 24, step: 0.1 },
   });
 
   // ISS 位置（通过GUI控制）
