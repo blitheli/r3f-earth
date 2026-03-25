@@ -4,7 +4,7 @@ import About from './pages/About'
 import GlobeTest from './pages/GlobeTest'
 import OnlyEarth from './pages/OnlyEarth'
 import Atmosphere from './pages/Atmosphere'
-import LEO from './pages/LEO'
+import LEO from './pages/LEO2'
 import GlobeCamera from './pages/GlobeCamera'
 
 function App() {
