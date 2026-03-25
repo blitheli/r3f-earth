@@ -38,7 +38,11 @@ import { ReorientationPlugin } from "../plugins/ReorientationPlugin";
 import { Globe } from "../components/Globe";
 import { ISS } from "../components/ISS";
 import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
-import { useControls } from "leva";
+import {
+  getLocalDate,
+  useLocalDateLevaControls,
+} from "../controls/localDateLevaControls";
+import { useLocationLevaControls } from "../controls/locationLevaControls";
 import { OrbitControls } from "@react-three/drei";
 
 extend({ AtmosphereLight });
@@ -69,12 +73,15 @@ function Content() {
   const [reorientationPlugin, setReorientationPlugin] =
     useState<ReorientationPlugin | null>(null);
 
-  // GUI控制
-  const { longitude, latitude, height, hour } = useControls({
-    longitude: { value: -110, min: -180, max: 180, step: 1 },
-    latitude: { value: 45, min: -90, max: 90, step: 1 },
-    height: { value: 408000, min: 10000, max: 1e6, step: 1000 },
-    hour: { value: 6.5, min: 0, max: 24, step: 0.01 },
+  const { longitude, latitude, height } = useLocationLevaControls({
+    longitude: -110,
+    latitude: 45,
+    height: 408000,
+  });
+  const { year, timeOfDay, dayOfYear } = useLocalDateLevaControls({
+    year: 2026,
+    dayOfYear: 200,
+    timeOfDay: 6.5,
   });
 
   //-------------------------------------------------------------------------------------
@@ -103,16 +110,15 @@ function Content() {
   }, [renderer, atmosphereContext]);
 
   //-------------------------------------------------------------------------------------
-  // 太阳/月亮方向：Story 的 useLocalDateControls 用 Motion spring，滑块拖动时数值连续变化；
-  // Leva + useEffect 只在状态跳变时更新，阴影/光照会「一顿一顿」。这里每帧用 damp 逼近面板目标，与弹簧类似。
-  const smoothHourRef = useRef(hour);
+  // Leva 滑块离散更新时阴影/光照易「一顿一顿」；每帧 damp 逼近经度与地方时，与 Story 里 Motion spring 类似。
+  const smoothTimeOfDayRef = useRef(timeOfDay);
   const smoothLongitudeRef = useRef(longitude);
   const DAMP = 10;
 
   useFrame((_, delta) => {
-    smoothHourRef.current = MathUtils.damp(
-      smoothHourRef.current,
-      hour,
+    smoothTimeOfDayRef.current = MathUtils.damp(
+      smoothTimeOfDayRef.current,
+      timeOfDay,
       DAMP,
       delta,
     );
@@ -123,11 +129,12 @@ function Content() {
       delta,
     );
 
-    const timeOfDay = smoothHourRef.current;
-    const dayOfYear = 200;
-    const epoch = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
-    const offset = smoothLongitudeRef.current / 15;
-    const date = epoch + ((dayOfYear - 1) * 24 + timeOfDay - offset) * 3600000;
+    const date = getLocalDate(
+      smoothLongitudeRef.current,
+      Math.floor(dayOfYear),
+      smoothTimeOfDayRef.current,
+      year,
+    );
 
     const { matrixECIToECEF, sunDirectionECEF, moonDirectionECEF } =
       atmosphereContext;
@@ -189,7 +196,7 @@ function Content() {
   // 4. 色调映射 (AgX Tone Mapping, 曝光度 = 2)
   // story.js 原版通过 useToneMappingControls 交互调节，这里固定为 2
   const toneMappingNode = useResource(
-    () => toneMapping(AgXToneMapping, uniform(2), lensFlareNode),
+    () => toneMapping(AgXToneMapping, uniform(4), lensFlareNode),
     [lensFlareNode],
   );
 
