@@ -8,7 +8,7 @@ import { useGLTF } from '../hooks/useGLTF'
 export interface B787Props extends ComponentProps<'group'> {}
 
 export const B787: FC<B787Props> = props => {
-  const gltf = useGLTF('public/b787.glb')
+  const gltf = useGLTF('/models/b787.glb')
 
   const userData: {
     initialized?: boolean
